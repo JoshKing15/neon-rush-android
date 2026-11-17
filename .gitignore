@@ -1,0 +1,15 @@
+# Godot 4 editor cache and imports
+.godot/
+.import/
+# Local exported builds
+build/
+dist/
+*.apk
+*.aab
+# Android signing and local configuration
+*.keystore
+*.jks
+*.pem
+*.key
+.env
+.env.*
