@@ -35,6 +35,14 @@ jobs:
             --runs 100 --seconds 60 --timeout 900 \
             --output reports
 
+      - name: Run v0.4 feature tests and capture console
+        if: always()
+        shell: bash
+        run: |
+          python3 tools/run_autoplay.py --suite features \
+            --godot /tmp/Godot_v4.4.1-stable_linux.x86_64 \
+            --timeout 180 --output reports
+
       - name: Upload logs and reports (even on failure)
         if: always()
         uses: actions/upload-artifact@v4

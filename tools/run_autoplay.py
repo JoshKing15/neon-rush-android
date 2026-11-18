@@ -18,6 +18,7 @@ WARN_RE = re.compile(r"(?im)^\\s*(?:WARNING:|WARN:|.*\\bWARNING\\b.*)")
 def main():
     p = argparse.ArgumentParser(description="Neon Rush isolated Godot auto-play and console reporter")
     p.add_argument("--godot", default=None, help="Godot executable (default: search PATH)")
+    p.add_argument("--suite", choices=("autoplay", "features"), default="autoplay")
     p.add_argument("--runs", type=int, default=100)
     p.add_argument("--seconds", type=float, default=45.0, help="Simulated seconds per run")
     p.add_argument("--timeout", type=int, default=600, help="Wall-clock subprocess timeout in seconds")
@@ -32,7 +33,7 @@ def main():
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    prefix = f"autoplay_{stamp}"
+    prefix = f"{args.suite}_{stamp}"
     log_path = output / (prefix + ".log")
     report_path = output / (prefix + ".json")
     summary_path = output / (prefix + "_summary.json")
@@ -52,7 +53,7 @@ def main():
             directory = tmp_path / name
             directory.mkdir()
             env[name] = str(directory)
-        cmd = [str(godot), "--headless", "--path", str(project), "--script", "res://tests/autoplay.gd",
+        cmd = [str(godot), "--headless", "--path", str(project), "--script", ("res://tests/features_v04.gd" if args.suite == "features" else "res://tests/autoplay.gd"),
                "--", f"--runs={args.runs}", f"--seconds={args.seconds}", f"--report={report_path}"]
         timed_out = False
         try:
