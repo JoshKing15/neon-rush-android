@@ -69,6 +69,7 @@ var mission_claimed: Array[bool] = [false, false, false]
 var mission_seconds := 0.0
 var menu_mode := "main"
 var mission_label: Label
+var skin_preview: Label
 var shop_button: Button
 var next_skin_button: Button
 var shop_index := 0
@@ -93,43 +94,62 @@ func _build_ui() -> void:
 	var layer := CanvasLayer.new()
 	add_child(layer)
 	hud = Label.new()
-	hud.position = Vector2(20, 25)
-	hud.add_theme_font_size_override("font_size", 23)
+	hud.position = Vector2(20, 18)
+	hud.add_theme_font_size_override("font_size", 20)
 	hud.add_theme_color_override("font_color", CYAN)
 	layer.add_child(hud)
 
 	hint = Label.new()
-	hint.position = Vector2(20, 95)
-	hint.add_theme_font_size_override("font_size", 15)
+	hint.position = Vector2(20, 108)
+	hint.add_theme_font_size_override("font_size", 18)
 	hint.add_theme_color_override("font_color", GOLD)
 	layer.add_child(hint)
 
 	pause_button = Button.new()
 	pause_button.text = "II"
 	pause_button.position = Vector2(405, 20)
-	pause_button.custom_minimum_size = Vector2(55, 55)
+	pause_button.custom_minimum_size = Vector2(64, 64)
+	pause_button.add_theme_font_size_override("font_size", 24)
 	pause_button.pressed.connect(_toggle_pause)
 	pause_button.visible = false
 	layer.add_child(pause_button)
 
 	overlay = PanelContainer.new()
-	overlay.position = Vector2(35, 245)
-	overlay.custom_minimum_size = Vector2(410, 290)
+	overlay.position = Vector2(30, 190)
+	overlay.custom_minimum_size = Vector2(420, 390)
+	var panel_style := StyleBoxFlat.new()
+	panel_style.bg_color = Color("111c38")
+	panel_style.border_color = CYAN.darkened(0.35)
+	panel_style.set_border_width_all(2)
+	panel_style.set_corner_radius_all(20)
+	panel_style.content_margin_left = 20
+	panel_style.content_margin_right = 20
+	panel_style.content_margin_top = 24
+	panel_style.content_margin_bottom = 24
+	overlay.add_theme_stylebox_override("panel", panel_style)
 	layer.add_child(overlay)
 	var stack := VBoxContainer.new()
-	stack.add_theme_constant_override("separation", 16)
+	stack.add_theme_constant_override("separation", 14)
 	overlay.add_child(stack)
 	title_label = Label.new()
 	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title_label.add_theme_font_size_override("font_size", 38)
+	title_label.add_theme_font_size_override("font_size", 40)
 	title_label.add_theme_color_override("font_color", CYAN)
 	stack.add_child(title_label)
 	subtitle_label = Label.new()
 	subtitle_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	subtitle_label.add_theme_font_size_override("font_size", 17)
+	subtitle_label.add_theme_font_size_override("font_size", 20)
+	subtitle_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	stack.add_child(subtitle_label)
+	skin_preview = Label.new()
+	skin_preview.text = "●"
+	skin_preview.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	skin_preview.add_theme_font_size_override("font_size", 64)
+	skin_preview.visible = false
+	stack.add_child(skin_preview)
 	play_button = Button.new()
-	play_button.custom_minimum_size.y = 56
+	play_button.custom_minimum_size.y = 64
+	play_button.add_theme_font_size_override("font_size", 23)
 	play_button.pressed.connect(_primary_action)
 	stack.add_child(play_button)
 	reward_button = Button.new()
@@ -139,14 +159,19 @@ func _build_ui() -> void:
 	stack.add_child(reward_button)
 	mission_label = Label.new()
 	mission_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	mission_label.add_theme_font_size_override("font_size", 14)
+	mission_label.add_theme_font_size_override("font_size", 17)
+	mission_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	stack.add_child(mission_label)
 	shop_button = Button.new()
 	shop_button.text = "SKIN SHOP"
+	shop_button.custom_minimum_size.y = 54
+	shop_button.add_theme_font_size_override("font_size", 20)
 	shop_button.pressed.connect(_open_shop)
 	stack.add_child(shop_button)
 	next_skin_button = Button.new()
 	next_skin_button.text = "NEXT SKIN"
+	next_skin_button.custom_minimum_size.y = 54
+	next_skin_button.add_theme_font_size_override("font_size", 20)
 	next_skin_button.pressed.connect(_next_skin)
 	next_skin_button.visible = false
 	stack.add_child(next_skin_button)
@@ -157,6 +182,7 @@ func _show_menu(heading: String, message: String, action: String) -> void:
 	title_label.text = heading
 	subtitle_label.text = message
 	mission_label.text = _mission_summary()
+	skin_preview.visible = false
 	shop_button.visible = not paused
 	next_skin_button.visible = false
 	play_button.text = action
@@ -380,7 +406,7 @@ func _end_game() -> void:
 	play_button.disabled = true
 
 func _refresh_hud() -> void:
-	var value := "SCORE %d   BEST %d\nGEMS %d   BANK %d   x%d  SHIELD %d  MAG %.0fs" % [score, best, crystals, wallet, mini(combo, 5), shield_charges, magnet_time]
+	var value := "SCORE %d    BEST %d\nGEMS %d    BANK %d    COMBO x%d\nSHIELD %d    MAGNET %.0fs" % [score, best, crystals, wallet, mini(combo, 5), shield_charges, magnet_time]
 	if hud != null and value != last_hud:
 		hud.text = value
 		last_hud = value
@@ -507,7 +533,13 @@ func _draw() -> void:
 	var orb_color: Color = SKIN_COLORS[selected_skin]
 	draw_circle(Vector2(player_x, PLAYER_Y), 21.0, orb_color if invulnerable <= 0.0 else GOLD)
 	if shield_charges > 0:
-		draw_arc(Vector2(player_x, PLAYER_Y), 30.0, 0.0, TAU, 32, CYAN, 4.0)
+		draw_circle(Vector2(player_x, PLAYER_Y), 48.0, Color(0.1, 0.9, 1.0, 0.09))
+		draw_arc(Vector2(player_x, PLAYER_Y), 37.0, 0.0, TAU, 48, CYAN, 5.0)
+		draw_arc(Vector2(player_x, PLAYER_Y), 43.0, 0.0, TAU, 48, Color(0.2, 0.9, 1.0, 0.4), 2.0)
+	if magnet_time > 0.0:
+		var magnet_tint := Color("ba7aff")
+		draw_arc(Vector2(player_x, PLAYER_Y), 53.0, -PI * 0.8 + pulse * 1.6, PI * 0.8 + pulse * 1.6, 36, magnet_tint, 4.0)
+		draw_arc(Vector2(player_x, PLAYER_Y), 59.0, PI * 0.2 - pulse * 1.6, PI * 1.4 - pulse * 1.6, 36, Color(0.73, 0.48, 1.0, 0.6), 3.0)
 	draw_circle(Vector2(player_x - 7, PLAYER_Y - 8), 6.0, Color.WHITE)
 	for obj in objects:
 		var p := Vector2(LANES[int(obj["lane"])], float(obj["y"]))
@@ -554,7 +586,7 @@ func _advance_mission(index: int, amount: int) -> void:
 
 func _mission_summary() -> String:
 	_check_daily_reset()
-	return "DAILY MISSIONS (AUTO REWARDS)\nGems %d/%d | Survive %ds/%ds\nNear misses %d/%d" % [mission_progress[0], MISSION_TARGETS[0], mission_progress[1], MISSION_TARGETS[1], mission_progress[2], MISSION_TARGETS[2]]
+	return "DAILY MISSIONS  •  AUTO REWARDS\nGEMS  %d/%d   •   SURVIVE  %ds/%ds\nNEAR MISSES  %d/%d" % [mission_progress[0], MISSION_TARGETS[0], mission_progress[1], MISSION_TARGETS[1], mission_progress[2], MISSION_TARGETS[2]]
 
 func _open_shop() -> void:
 	if running or paused:
@@ -564,6 +596,7 @@ func _open_shop() -> void:
 	shop_button.visible = false
 	next_skin_button.visible = true
 	mission_label.text = ""
+	skin_preview.visible = true
 	_update_shop()
 
 func _next_skin() -> void:
@@ -574,6 +607,7 @@ func _update_shop() -> void:
 	var owned := owned_skins.has(shop_index)
 	title_label.text = "NEON SHOP"
 	subtitle_label.text = "%s ORB\nBANK: %d GEMS\n%s" % [SKIN_NAMES[shop_index], wallet, "OWNED" if owned else "COST: %d GEMS" % SKIN_COSTS[shop_index]]
+	skin_preview.add_theme_color_override("font_color", SKIN_COLORS[shop_index])
 	play_button.text = "EQUIP" if owned else "BUY"
 
 func _shop_action() -> void:
