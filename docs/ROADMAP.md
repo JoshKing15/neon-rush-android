@@ -1,28 +1,24 @@
 # Neon Rush roadmap
 
-## v0.1 — first playable prototype
-- [x] Portrait game in Godot 4, no external assets
-- [x] 3-lane keyboard, mouse and touchscreen controls
-- [x] Dodge obstacles, collect crystals, score and speed ramp
-- [x] Saved personal best and restart flow
-- [x] Rewarded-ad placeholder visibly disabled
-- [ ] Validate in Godot editor and on physical Android device
+## v0.2 — gameplay foundations (source implemented, QA pending)
+- [x] Swept collisions and delta cap
+- [x] Retry lockout and background/focus pause
+- [x] One-lane movement with interpolation
+- [x] Pattern tiers and reachability check
+- [x] Near-miss and crystal combo scoring
+- [ ] Test and tune controls and pattern fairness on real Android phones
+- [ ] Add sound, particles, haptics, accessibility and onboarding
+- [ ] Replace legacy save with versioned progression data
 
-## v0.2 — feel and retention
-- [ ] Add sound/music toggles, particles, screen shake, haptics
-- [ ] Balancing, obstacles variants, daily challenges
-- [ ] Pause and resume, accessibility and tutorial
-- [ ] Local best score/analytics privacy review
+## v0.3 — retention and release preparation
+- [ ] Shields, magnet and other power-ups
+- [ ] Daily missions and cosmetic unlocks
+- [ ] Daily seeded challenge
+- [ ] Godot Android export and signed test APK/AAB
+- [ ] AdMob integration with test ads, consent, and verified rewarded callback
+- [ ] Privacy policy, data safety, age rating, Play Console testing
 
-## v0.3 — Android test release
-- [ ] Set app ID, icon and launch screen
-- [ ] Generate signed Android App Bundle through Godot export
-- [ ] Setup AdMob rewarded ads with TEST IDs only
-- [ ] Handle verified reward callbacks, offline/no-fill
-- [ ] Consent/privacy policy/data safety and store listing
-- [ ] Internal Play Store testing, closed testing as applicable
-
-## v1.0 — public release
-- [ ] Production ad units after verified approval and policy review
-- [ ] Crash monitoring, retention and ad engagement measurement
-- [ ] Launch trailers for TikTok / YouTube Shorts
+## v1.0
+- [ ] Production ad units after policy approval
+- [ ] Crash-free session and retention metrics
+- [ ] Store listing and public release
