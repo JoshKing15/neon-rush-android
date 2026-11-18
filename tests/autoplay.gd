@@ -117,7 +117,7 @@ func _choose_lane(game: Node) -> int:
 	var best_lane: int = game.lane
 	var best_value := -100000.0
 	for candidate in range(3):
-		var value := rewards[candidate] * 2.0 - absf(float(candidate - game.lane)) * 0.8
+		var value: float = float(rewards[candidate]) * 2.0 - absf(float(candidate - game.lane)) * 0.8
 		if blocked[candidate]:
 			value -= 1000.0
 		# Penalize crossing a blocked adjacent lane.
