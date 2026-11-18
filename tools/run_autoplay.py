@@ -12,8 +12,8 @@ import sys
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
-ERROR_RE = re.compile(r"(?im)^\\s*(?:ERROR:|SCRIPT ERROR:|FATAL:|.*\\bERROR\\b.*)")
-WARN_RE = re.compile(r"(?im)^\\s*(?:WARNING:|WARN:|.*\\bWARNING\\b.*)")
+ERROR_RE = re.compile(r"(?im)^\s*(?:ERROR:|SCRIPT ERROR:|FATAL:|.*\bERROR\b.*)")
+WARN_RE = re.compile(r"(?im)^\s*(?:WARNING:|WARN:|.*\bWARNING\b.*)")
 
 def main():
     p = argparse.ArgumentParser(description="Neon Rush isolated Godot auto-play and console reporter")
@@ -77,7 +77,10 @@ def main():
         except (ValueError, OSError) as exc:
             errors.append(f"Invalid gameplay report: {exc}")
     passed = exit_code == 0 and not errors and game_report is not None and not game_report.get("invariant_failures")
+    commit_sha = os.environ.get("GITHUB_SHA", "unknown-local")
     summary = {
+        "git_commit_sha": commit_sha,
+        "godot_version_target": "4.4.1 (CI)",
         "timestamp_utc": stamp,
         "status": "PASS" if passed else "FAIL",
         "godot_exit_code": exit_code,
@@ -95,7 +98,8 @@ def main():
         "notes": "Godot headless simulation; not Android device QA or a human playability verdict"
     }
     summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
-    print(f"Neon Rush auto-play: {summary['status']} | runs {summary['runs_completed']}/{args.runs} | "
+    print("QA COMMIT: " + commit_sha)
+    print(f"Neon Rush {args.suite}: {summary['status']} | runs {summary['runs_completed']}/{summary['runs_requested']} | "
           f"errors {len(errors)} | warnings {len(warnings)}")
     print(f"Console: {log_path}\nSummary: {summary_path}")
     if game_report:

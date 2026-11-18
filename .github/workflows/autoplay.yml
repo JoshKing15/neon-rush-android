@@ -48,6 +48,7 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq xvfb libgl1 libx11-6 libxcursor1 libxrandr2 libxi6 libasound2t64
           mkdir -p reports/screenshots
+          printf '{"git_commit_sha":"%s","workflow_run_id":"%s","godot_version":"4.4.1","capture_type":"staged visual checkpoints"}\n' "$GITHUB_SHA" "$GITHUB_RUN_ID" > reports/screenshots/manifest.json
           timeout 45s xvfb-run -a -s "-screen 0 1024x900x24" \
             /tmp/Godot_v4.4.1-stable_linux.x86_64 --audio-driver Dummy --path . --quit-after 1200 \
             --script res://tests/screenshots.gd -- \

@@ -52,6 +52,7 @@ func _run() -> void:
 	game.objects.clear()
 	game.shield_charges = 1
 	game._refresh_hud()
+	game.queue_redraw()
 	if await _capture("03_shield_active"):
 		count += 1
 	game.shield_charges = 0
@@ -59,9 +60,14 @@ func _run() -> void:
 	game.objects.clear()
 	game.objects.append_array([{"lane": 0, "y": 525.0, "kind": "crystal"}, {"lane": 2, "y": 370.0, "kind": "crystal"}])
 	game._refresh_hud()
+	game.queue_redraw()
 	if await _capture("04_magnet_active"):
 		count += 1
 	game.objects.clear()
+	game.magnet_time = 0.0
+	game.score = 350
+	game.crystals = 4
+	game._refresh_hud()
 	game._end_game()
 	if await _capture("05_game_over"):
 		count += 1
@@ -69,9 +75,11 @@ func _run() -> void:
 	game._open_shop()
 	game.shop_index = 1
 	game._update_shop()
+	game._refresh_hud()
+	game.queue_redraw()
 	if await _capture("06_skin_shop"):
 		count += 1
-	game._show_menu("NEON RUSH", "VISUAL QA - DAILY MISSIONS", "PLAY")
+	game._show_menu("NEON RUSH", "DAILY MISSIONS", "PLAY")
 	if await _capture("07_daily_missions"):
 		count += 1
 	print("SCREENSHOT SUMMARY: %d/7 images" % count)
