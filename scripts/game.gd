@@ -7,6 +7,12 @@ const HEIGHT := 854.0
 const PLAYER_Y := 700.0
 const LANES := [110.0, 240.0, 370.0]
 const SAVE_PATH := "user://neon_rush.save"
+const PROFILE_PATH := "user://neon_rush_profile_v1.json"
+const SKIN_NAMES := ["CYAN", "VIOLET", "LIME", "SUNSET"]
+const SKIN_COLORS := [Color("38eaff"), Color("ba7aff"), Color("78ff8c"), Color("ff9959")]
+const SKIN_COSTS := [0, 25, 50, 75]
+const MISSION_TARGETS := [12, 120, 20]
+const MISSION_REWARDS := [15, 20, 25]
 const BG := Color("080d22")
 const CYAN := Color("38eaff")
 const PINK := Color("ff4386")
@@ -51,6 +57,21 @@ var feedback := ""
 var feedback_timer := 0.0
 var sound_player: AudioStreamPlayer
 var sound_stream: AudioStreamGeneratorPlayback
+var wallet := 0
+var owned_skins: Array[int] = [0]
+var selected_skin := 0
+var shield_charges := 0
+var magnet_time := 0.0
+var powerup_clock := 11.0
+var mission_day := ""
+var mission_progress: Array[int] = [0, 0, 0]
+var mission_claimed: Array[bool] = [false, false, false]
+var mission_seconds := 0.0
+var menu_mode := "main"
+var mission_label: Label
+var shop_button: Button
+var next_skin_button: Button
+var shop_index := 0
 var hud: Label
 var hint: Label
 var overlay: PanelContainer
@@ -63,6 +84,7 @@ var pause_button: Button
 func _ready() -> void:
 	rng.randomize()
 	_load_best()
+	_load_profile()
 	_build_ui()
 	_setup_audio()
 	_show_menu("NEON RUSH", "TAP LEFT OR RIGHT TO STEP ONE LANE\nDodge blocks. Chain crystals and near-misses.", "PLAY")
@@ -115,11 +137,28 @@ func _build_ui() -> void:
 	reward_button.disabled = true
 	reward_button.visible = false
 	stack.add_child(reward_button)
+	mission_label = Label.new()
+	mission_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	mission_label.add_theme_font_size_override("font_size", 14)
+	stack.add_child(mission_label)
+	shop_button = Button.new()
+	shop_button.text = "SKIN SHOP"
+	shop_button.pressed.connect(_open_shop)
+	stack.add_child(shop_button)
+	next_skin_button = Button.new()
+	next_skin_button.text = "NEXT SKIN"
+	next_skin_button.pressed.connect(_next_skin)
+	next_skin_button.visible = false
+	stack.add_child(next_skin_button)
 	_refresh_hud()
 
 func _show_menu(heading: String, message: String, action: String) -> void:
+	menu_mode = "pause" if paused else "main"
 	title_label.text = heading
 	subtitle_label.text = message
+	mission_label.text = _mission_summary()
+	shop_button.visible = not paused
+	next_skin_button.visible = false
 	play_button.text = action
 	overlay.visible = true
 	pause_button.visible = false
@@ -128,7 +167,9 @@ func _show_menu(heading: String, message: String, action: String) -> void:
 func _primary_action() -> void:
 	if retry_lock > 0.0:
 		return
-	if paused:
+	if menu_mode == "shop":
+		_shop_action()
+	elif paused:
 		_resume()
 	else:
 		start_game()
@@ -143,6 +184,11 @@ func start_game() -> void:
 	trails.clear()
 	feedback = ""
 	feedback_timer = 0.0
+	shield_charges = 0
+	magnet_time = 0.0
+	powerup_clock = 11.0
+	mission_seconds = 0.0
+	_check_daily_reset()
 	elapsed = 0.0
 	spawn_clock = 0.9
 	score_fraction = 0.0
@@ -175,6 +221,12 @@ func _process(delta: float) -> void:
 	var dt := minf(delta, 0.05)
 	elapsed += dt
 	invulnerable = maxf(0.0, invulnerable - dt)
+	magnet_time = maxf(0.0, magnet_time - dt)
+	mission_seconds += dt
+	if mission_seconds >= 1.0:
+		var seconds := int(mission_seconds)
+		mission_seconds -= float(seconds)
+		_advance_mission(1, seconds)
 	player_x = move_toward(player_x, LANES[lane], MOVE_SPEED * dt)
 	trails.append({"position": Vector2(player_x, PLAYER_Y), "life": 0.22})
 	if trails.size() > 12:
@@ -188,6 +240,10 @@ func _process(delta: float) -> void:
 
 	# Speed rises with time; later tiers introduce more difficult patterns.
 	speed = minf(680.0, 270.0 + elapsed * 7.0)
+	powerup_clock -= dt
+	if powerup_clock <= 0.0:
+		_spawn_powerup()
+		powerup_clock = rng.randf_range(13.0, 19.0)
 	spawn_clock -= dt
 	if spawn_clock <= 0.0:
 		_spawn_row()
@@ -202,11 +258,32 @@ func _process(delta: float) -> void:
 		var crosses := previous_y <= PLAYER_Y + HIT_Y and next_y >= PLAYER_Y - HIT_Y
 		var dx := absf(player_x - LANES[int(obj["lane"])])
 		if crosses and obj["kind"] == "block" and dx <= HIT_X and invulnerable <= 0.0:
+			if shield_charges > 0:
+				shield_charges -= 1
+				invulnerable = 1.0
+				_burst(Vector2(player_x, PLAYER_Y), CYAN, 20)
+				_feedback("SHIELD SAVED YOU!")
+				objects.remove_at(i)
+				continue
 			objects[i] = obj
 			_end_game()
 			break
-		if crosses and obj["kind"] == "crystal" and dx <= HIT_X:
+		if crosses and (obj["kind"] == "shield" or obj["kind"] == "magnet") and dx <= HIT_X:
+			if obj["kind"] == "shield":
+				shield_charges = 1
+				_feedback("SHIELD READY")
+			else:
+				magnet_time = 8.0
+				_feedback("MAGNET 8 SECONDS")
+			_burst(Vector2(player_x, PLAYER_Y), CYAN, 14)
+			_tone(820.0, 0.12)
+			objects.remove_at(i)
+			continue
+		if crosses and obj["kind"] == "crystal" and (dx <= HIT_X or (magnet_time > 0.0 and dx <= 145.0)):
 			crystals += 1
+			wallet += 1
+			_advance_mission(0, 1)
+			_save_profile()
 			combo += 1
 			score += 50 * mini(combo, 5)
 			hint.text = "CRYSTAL COMBO x%d" % mini(combo, 5)
@@ -218,6 +295,7 @@ func _process(delta: float) -> void:
 		if previous_y <= PLAYER_Y and next_y > PLAYER_Y and obj["kind"] == "block" and not bool(obj.get("near", false)):
 			if dx > HIT_X and dx <= NEAR_X:
 				obj["near"] = true
+				_advance_mission(2, 1)
 				combo += 1
 				score += 25 * mini(combo, 5)
 				hint.text = "NEAR MISS! COMBO x%d" % mini(combo, 5)
@@ -295,13 +373,14 @@ func _end_game() -> void:
 	if score > best:
 		best = score
 		_save_best()
-	_show_menu("GAME OVER", "SCORE %d   BEST %d\nCRYSTALS %d" % [score, best, crystals], "PLAY AGAIN")
+	_save_profile()
+	_show_menu("GAME OVER", "SCORE %d   BEST %d\nRUN CRYSTALS %d  BANK %d" % [score, best, crystals, wallet], "PLAY AGAIN")
 	# Prevent a death-time tap from instantly triggering a restart.
 	retry_lock = 0.65
 	play_button.disabled = true
 
 func _refresh_hud() -> void:
-	var value := "SCORE %d   BEST %d\nCRYSTALS %d   COMBO x%d" % [score, best, crystals, mini(combo, 5)]
+	var value := "SCORE %d   BEST %d\nGEMS %d   BANK %d   x%d  SHIELD %d  MAG %.0fs" % [score, best, crystals, wallet, mini(combo, 5), shield_charges, magnet_time]
 	if hud != null and value != last_hud:
 		hud.text = value
 		last_hud = value
@@ -346,6 +425,17 @@ func _step(direction: int) -> void:
 	if old_lane != lane:
 		_burst(Vector2(player_x, PLAYER_Y), CYAN, 4)
 		_tone(320.0, 0.03)
+
+func _spawn_powerup() -> void:
+	# Spawn only in a lane with no newly spawned obstacle; pickups are optional.
+	var free_lanes: Array[int] = [0, 1, 2]
+	for obj in objects:
+		if absf(float(obj["y"]) + 55.0) < 80.0 and obj["kind"] == "block":
+			free_lanes.erase(int(obj["lane"]))
+	if free_lanes.is_empty():
+		return
+	var target: int = free_lanes[rng.randi_range(0, free_lanes.size() - 1)]
+	objects.append({"lane": target, "y": -55.0, "kind": "shield" if rng.randf() < 0.5 else "magnet"})
 
 func _setup_audio() -> void:
 	sound_player = AudioStreamPlayer.new()
@@ -414,11 +504,19 @@ func _draw() -> void:
 		draw_circle(Vector2(fx["position"]), 19.0 * alpha, Color(0.1, 0.9, 1.0, alpha * 0.24))
 	draw_circle(Vector2(player_x, PLAYER_Y), 40.0 + sin(pulse * 9.0) * 2.0, Color(0.1, 0.9, 1.0, 0.13))
 	draw_circle(Vector2(player_x, PLAYER_Y), 33.0, Color(0.23, 0.92, 1.0, 0.2))
-	draw_circle(Vector2(player_x, PLAYER_Y), 21.0, CYAN if invulnerable <= 0.0 else GOLD)
+	var orb_color: Color = SKIN_COLORS[selected_skin]
+	draw_circle(Vector2(player_x, PLAYER_Y), 21.0, orb_color if invulnerable <= 0.0 else GOLD)
+	if shield_charges > 0:
+		draw_arc(Vector2(player_x, PLAYER_Y), 30.0, 0.0, TAU, 32, CYAN, 4.0)
 	draw_circle(Vector2(player_x - 7, PLAYER_Y - 8), 6.0, Color.WHITE)
 	for obj in objects:
 		var p := Vector2(LANES[int(obj["lane"])], float(obj["y"]))
-		if obj["kind"] == "block":
+		if obj["kind"] == "shield" or obj["kind"] == "magnet":
+			var tint: Color = CYAN if obj["kind"] == "shield" else Color("ad70ff")
+			draw_circle(p, 23.0, Color(tint.r, tint.g, tint.b, 0.18))
+			draw_arc(p, 17.0, 0.0, TAU, 24, tint, 4.0)
+			draw_line(p + Vector2(-8, 0), p + Vector2(8, 0), tint, 3.0)
+		elif obj["kind"] == "block":
 			draw_rect(Rect2(p - Vector2(40, 33), Vector2(80, 66)), Color(1.0, 0.1, 0.5, 0.13))
 			draw_rect(Rect2(p - Vector2(33, 26), Vector2(66, 52)), PINK)
 			draw_rect(Rect2(p - Vector2(23, 17), Vector2(46, 34)), Color("831d51"))
@@ -434,6 +532,100 @@ func _draw() -> void:
 		draw_circle(Vector2(fx["position"]), 3.0 + 2.0 * alpha, tint)
 	if feedback_timer > 0.0:
 		draw_string(ThemeDB.fallback_font, Vector2(100, PLAYER_Y - 80.0 - (0.8 - feedback_timer) * 30.0), feedback, HORIZONTAL_ALIGNMENT_CENTER, 280, 23, GOLD)
+
+func _check_daily_reset() -> void:
+	var today := Time.get_date_string_from_system(false)
+	if mission_day != today:
+		mission_day = today
+		mission_progress = [0, 0, 0]
+		mission_claimed = [false, false, false]
+		_save_profile()
+
+func _advance_mission(index: int, amount: int) -> void:
+	_check_daily_reset()
+	if mission_claimed[index]:
+		return
+	mission_progress[index] = mini(MISSION_TARGETS[index], mission_progress[index] + amount)
+	if mission_progress[index] >= MISSION_TARGETS[index]:
+		mission_claimed[index] = true
+		wallet += MISSION_REWARDS[index]
+		_feedback("DAILY MISSION +%d GEMS" % MISSION_REWARDS[index])
+		_save_profile()
+
+func _mission_summary() -> String:
+	_check_daily_reset()
+	return "DAILY MISSIONS (AUTO REWARDS)\nGems %d/%d | Survive %ds/%ds\nNear misses %d/%d" % [mission_progress[0], MISSION_TARGETS[0], mission_progress[1], MISSION_TARGETS[1], mission_progress[2], MISSION_TARGETS[2]]
+
+func _open_shop() -> void:
+	if running or paused:
+		return
+	menu_mode = "shop"
+	shop_index = selected_skin
+	shop_button.visible = false
+	next_skin_button.visible = true
+	mission_label.text = ""
+	_update_shop()
+
+func _next_skin() -> void:
+	shop_index = (shop_index + 1) % SKIN_NAMES.size()
+	_update_shop()
+
+func _update_shop() -> void:
+	var owned := owned_skins.has(shop_index)
+	title_label.text = "NEON SHOP"
+	subtitle_label.text = "%s ORB\nBANK: %d GEMS\n%s" % [SKIN_NAMES[shop_index], wallet, "OWNED" if owned else "COST: %d GEMS" % SKIN_COSTS[shop_index]]
+	play_button.text = "EQUIP" if owned else "BUY"
+
+func _shop_action() -> void:
+	if owned_skins.has(shop_index):
+		selected_skin = shop_index
+		_save_profile()
+		_show_menu("NEON RUSH", "SKIN EQUIPPED: %s" % SKIN_NAMES[selected_skin], "PLAY")
+	elif wallet >= SKIN_COSTS[shop_index]:
+		wallet -= SKIN_COSTS[shop_index]
+		owned_skins.append(shop_index)
+		selected_skin = shop_index
+		_save_profile()
+		_show_menu("NEON RUSH", "UNLOCKED: %s" % SKIN_NAMES[selected_skin], "PLAY")
+	else:
+		subtitle_label.text = "NOT ENOUGH GEMS\nBANK: %d / COST: %d" % [wallet, SKIN_COSTS[shop_index]]
+
+func _save_profile() -> void:
+	var profile := {"version": 1, "best": best, "wallet": wallet, "owned": owned_skins, "selected": selected_skin, "day": mission_day, "progress": mission_progress, "claimed": mission_claimed}
+	var file := FileAccess.open(PROFILE_PATH, FileAccess.WRITE)
+	if file:
+		file.store_string(JSON.stringify(profile))
+
+func _load_profile() -> void:
+	if not FileAccess.file_exists(PROFILE_PATH):
+		_check_daily_reset()
+		return
+	var file := FileAccess.open(PROFILE_PATH, FileAccess.READ)
+	if file == null:
+		return
+	var parsed: Variant = JSON.parse_string(file.get_as_text())
+	if not parsed is Dictionary:
+		return
+	var profile: Dictionary = parsed
+	best = maxi(best, int(profile.get("best", 0)))
+	wallet = maxi(0, int(profile.get("wallet", 0)))
+	owned_skins = [0]
+	for item in profile.get("owned", []):
+		var index := int(item)
+		if index >= 0 and index < SKIN_NAMES.size() and not owned_skins.has(index):
+			owned_skins.append(index)
+	selected_skin = int(profile.get("selected", 0))
+	if not owned_skins.has(selected_skin):
+		selected_skin = 0
+	mission_day = str(profile.get("day", ""))
+	var progress: Array = profile.get("progress", [])
+	var claimed: Array = profile.get("claimed", [])
+	for i in range(3):
+		if i < progress.size():
+			mission_progress[i] = clampi(int(progress[i]), 0, MISSION_TARGETS[i])
+		if i < claimed.size():
+			mission_claimed[i] = bool(claimed[i])
+	_check_daily_reset()
 
 func _save_best() -> void:
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)

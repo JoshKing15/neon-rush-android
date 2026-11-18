@@ -1,22 +1,24 @@
 # Neon Rush roadmap
 
-## v0.2 — working prototype
-- [x] Movement, collisions, tiered patterns, combos
-- [x] User tested Godot 4.7.2 and confirmed gameplay works
+## v0.2 — core gameplay
+- [x] Three lanes, collision handling, tiered patterns and combos
+- [x] User confirmed v0.2 playable in Godot 4.7.2
 
-## v0.3 — visual and audio feedback (QA pending)
-- [x] Neon lane glow, moving road grid, pulsing crystals
-- [x] Orb trail, particle bursts, floating bonus feedback
-- [x] Procedural audio cues for movement, crystals, near misses and death
-- [ ] Verify all changes in Godot 4.7.2 and test on Android
-- [ ] Sound mute setting, haptics, accessibility
+## v0.3 — polish
+- [x] Neon trails, particles, sounds and feedback
+- [ ] Full device QA
 
-## v0.4 — retention
-- [ ] Power-ups, cosmetic unlocks, daily missions
+## v0.4 — retention (code implemented, QA pending)
+- [x] Shield pickup (absorbs one hit)
+- [x] Magnet pickup (eight seconds of adjacent-lane collection)
+- [x] Persistent gem bank, preserving legacy best score
+- [x] Four orb skins with unlock and equip UI
+- [x] Three local daily missions with once-per-day automatic rewards
+- [ ] Manual QA in Godot and Android, balance tuning, UI accessibility
 
-## v0.5 — Android monetization
-- [ ] Android API 36 compatible export and 16 KB page compatibility
-- [ ] AdMob test ads, consent and verified rewards
+## v0.5 — Android and monetization
+- [ ] Android export meeting current Play API and 16 KB native requirements
+- [ ] AdMob test integration, consent, verified rewarded callbacks
 
-## v1.0
-- [ ] Analytics, player testing and Play Store launch
+## v1.0 — release
+- [ ] Crash and retention analytics, privacy policy, Play Store testing
