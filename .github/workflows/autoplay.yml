@@ -27,12 +27,12 @@ jobs:
           chmod +x /tmp/Godot_v4.4.1-stable_linux.x86_64
           /tmp/Godot_v4.4.1-stable_linux.x86_64 --headless --version
 
-      - name: Run isolated gameplay smoke test and capture console
+      - name: Run 100-game stress test and capture console
         shell: bash
         run: |
           python3 tools/run_autoplay.py \
             --godot /tmp/Godot_v4.4.1-stable_linux.x86_64 \
-            --runs 5 --seconds 20 --timeout 480 \
+            --runs 100 --seconds 60 --timeout 900 \
             --output reports
 
       - name: Upload logs and reports (even on failure)
