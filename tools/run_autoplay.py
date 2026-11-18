@@ -53,7 +53,7 @@ def main():
             directory = tmp_path / name
             directory.mkdir()
             env[name] = str(directory)
-        cmd = [str(godot), "--headless", "--audio-driver", "Dummy", "--path", str(project), "--quit-after", "2400" if args.suite == "features" else "24000", "--script", ("res://tests/features_v04.gd" if args.suite == "features" else "res://tests/autoplay.gd"),
+        cmd = [str(godot), "--headless", "--audio-driver", "Dummy", "--path", str(project), "--quit-after", "1200" if args.suite == "features" else "24000", "--script", ("res://tests/features_v04.gd" if args.suite == "features" else "res://tests/autoplay.gd"),
                "--", f"--runs={args.runs}", f"--seconds={args.seconds}", f"--report={report_path}"]
         timed_out = False
         try:
@@ -82,7 +82,8 @@ def main():
         "status": "PASS" if passed else "FAIL",
         "godot_exit_code": exit_code,
         "timed_out": timed_out,
-        "runs_requested": args.runs,
+        "suite": args.suite,
+        "runs_requested": 1 if args.suite == "features" else args.runs,
         "runs_completed": game_report.get("runs_completed", 0) if game_report else 0,
         "console_error_count": len(errors),
         "console_warning_count": len(warnings),
@@ -101,6 +102,9 @@ def main():
         print(f"Gameplay: {report_path}")
     if errors:
         print("First console error: " + errors[0])
+    if not passed:
+        print("Diagnostic tail:")
+        print("\n".join(output_text.splitlines()[-35:]))
     return 0 if passed else 1
 
 if __name__ == "__main__":

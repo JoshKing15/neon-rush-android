@@ -1,6 +1,8 @@
 name: Neon Rush Auto-Play QA
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -9,7 +11,7 @@ permissions:
 jobs:
   autoplay:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 8
     steps:
       - name: Check out game
         uses: actions/checkout@v4
