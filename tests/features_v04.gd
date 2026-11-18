@@ -58,8 +58,10 @@ func run_tests() -> void:
 	game._process(0.05)
 	check_case("Expired magnet does not collect", game.crystals == 1)
 	game.mission_day = Time.get_date_string_from_system(false)
-	game.mission_progress = [0, 0, 0]
-	game.mission_claimed = [false, false, false]
+	game.mission_progress.clear()
+	game.mission_progress.append_array([0, 0, 0])
+	game.mission_claimed.clear()
+	game.mission_claimed.append_array([false, false, false])
 	before = game.wallet
 	game._advance_mission(0, 12)
 	check_case("Crystal mission reward", game.wallet == before + 15)

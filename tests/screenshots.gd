@@ -41,11 +41,12 @@ func _run() -> void:
 	game.start_game()
 	game.spawn_clock = 999.0
 	game.powerup_clock = 999.0
-	game.objects = [
+	game.objects.clear()
+	game.objects.append_array([
 		{"lane": 0, "y": 280.0, "kind": "block", "near": false},
 		{"lane": 2, "y": 450.0, "kind": "crystal"},
 		{"lane": 1, "y": 160.0, "kind": "block", "near": false}
-	]
+	])
 	if await _capture("02_gameplay_obstacles"):
 		count += 1
 	game.objects.clear()
@@ -55,7 +56,8 @@ func _run() -> void:
 		count += 1
 	game.shield_charges = 0
 	game.magnet_time = 8.0
-	game.objects = [{"lane": 0, "y": 525.0, "kind": "crystal"}, {"lane": 2, "y": 370.0, "kind": "crystal"}]
+	game.objects.clear()
+	game.objects.append_array([{"lane": 0, "y": 525.0, "kind": "crystal"}, {"lane": 2, "y": 370.0, "kind": "crystal"}])
 	game._refresh_hud()
 	if await _capture("04_magnet_active"):
 		count += 1
