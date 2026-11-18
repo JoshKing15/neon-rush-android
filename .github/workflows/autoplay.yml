@@ -1,0 +1,45 @@
+name: Neon Rush Auto-Play QA
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  autoplay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out game
+        uses: actions/checkout@v4
+
+      - name: Install Godot 4.4.1 headless-capable editor
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 \
+            --output /tmp/godot.zip \
+            https://github.com/godotengine/godot/releases/download/4.4.1-stable/Godot_v4.4.1-stable_linux.x86_64.zip
+          unzip -q /tmp/godot.zip -d /tmp
+          chmod +x /tmp/Godot_v4.4.1-stable_linux.x86_64
+          /tmp/Godot_v4.4.1-stable_linux.x86_64 --headless --version
+
+      - name: Run isolated gameplay smoke test and capture console
+        shell: bash
+        run: |
+          python3 tools/run_autoplay.py \
+            --godot /tmp/Godot_v4.4.1-stable_linux.x86_64 \
+            --runs 5 --seconds 20 --timeout 480 \
+            --output reports
+
+      - name: Upload logs and reports (even on failure)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: neon-rush-autoplay-reports
+          path: reports/
+          if-no-files-found: warn
+          retention-days: 14
