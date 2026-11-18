@@ -13,3 +13,6 @@ dist/
 *.key
 .env
 .env.*
+
+# Local QA output
+reports/
