@@ -1,29 +1,27 @@
-# Neon Rush — v0.2 gameplay prototype
+# Neon Rush — Godot 4 neon arcade game
 
-Godot 4 portrait arcade game for Android. Dodge neon obstacles, collect crystals, build combos, and chase a personal best.
+Three-lane portrait arcade game for Android, developed in Godot 4. Dodge neon obstacles, collect crystals, build combos and chase a personal best.
 
-**Status:** v0.2 source update. Not yet tested in Godot or on an Android phone. No live or test ads are integrated.
+**Current status (18 November 2026):** v0.4 features are committed to `main` but **not yet verified by a Godot runtime or Android device test**. v0.2 was previously played successfully in Godot 4.7.2. No Android release or AdMob integration exists.
 
-## v0.2 changes
-- Safer swept vertical collision detection and clamped frame delta
-- Death-screen retry lockout, pause button, app focus/background pause
-- Smooth one-lane-per-tap movement (A/D, arrows, left/right half of screen)
-- Tiered obstacle patterns (easy, medium, hard), reachability validation and speed-scaled spacing
-- Crystal combo scoring and near-miss bonuses
-- HUD text only updates when values change
-- Disabled rewarded continue placeholder remains hidden until ads are implemented
+## Current source features
+- Three-lane Endless Mode with obstacle patterns, swept collision checks, near misses, crystal combos and high score
+- v0.3 effects: trails, glow, particles and generated sounds (runtime QA pending)
+- v0.4 power-ups: one-hit shield and timed crystal magnet (runtime QA pending)
+- Persistent crystal wallet, four unlockable/equippable neon orb skins and three local daily missions (runtime QA pending)
+- Best-score save compatibility; new v0.4 profile stored separately
+- Rewarded continue placeholder remains disabled until an ad SDK is correctly integrated
 
-## Run
-1. Install Godot 4.3+ from https://godotengine.org/download
-2. Clone or download this repository
-3. Import `project.godot` into Godot Project Manager
-4. Press F5 and use A/D, arrow keys, or click the left/right half of the window
+## Run and test
+1. Install Godot 4.7.2.
+2. Clone/download the repository and import `project.godot` in Godot Project Manager.
+3. Press F5. Use A/D, arrow keys or click the left/right half of the game window.
+4. Follow `docs/V04_TESTING.md` to verify power-ups, shop, daily rewards and persistence.
+5. Report compile/runtime errors before adding World Adventure.
 
-## Known limitations
-- Gameplay must be validated in the Godot editor and on Android hardware.
-- The prototype still uses a legacy best-score-only save file.
-- No audio, haptics, missions, cosmetic progression, ad SDK, Android export preset or Play Store build yet.
-- Pattern reachability is based on one-lane transitions and does not guarantee real-world timing fairness; playtesting and tuning are required.
-- No ad revenue can be earned from this source version.
+## Approved direction
+**v0.5 = World Adventure vertical slice:** ten playable Neon District levels, a level map, moving blocks, telegraphed laser gates, three-star progression, Prism Warden boss and safe persistence, while keeping Endless Mode working. Long-term vision: ten worlds / 100 levels.
 
-See `docs/ROADMAP.md` and `docs/ADMOB_SETUP.md` for next steps.
+**Android export and AdMob are deferred to later milestones.** No ads are currently integrated and no revenue can be earned from this source version.
+
+See `docs/ROADMAP.md` for the approved 60-day planning baseline and project review rules.
