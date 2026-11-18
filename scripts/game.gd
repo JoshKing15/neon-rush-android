@@ -1,5 +1,5 @@
 extends Node2D
-## Neon Rush v0.2 — safer collisions, responsive movement, pattern tiers, combos.
+## Neon Rush v0.3 — gameplay polish, particles, procedural sound and feedback.
 ## Ads are intentionally NOT integrated in this prototype.
 
 const WIDTH := 480.0
@@ -44,6 +44,13 @@ var invulnerable := 0.0
 var last_hud := ""
 var last_safe_lane := 1
 var queued_rows: Array[String] = []
+var sparks: Array[Dictionary] = []
+var trails: Array[Dictionary] = []
+var pulse := 0.0
+var feedback := ""
+var feedback_timer := 0.0
+var sound_player: AudioStreamPlayer
+var sound_stream: AudioStreamGeneratorPlayback
 var hud: Label
 var hint: Label
 var overlay: PanelContainer
@@ -57,6 +64,7 @@ func _ready() -> void:
 	rng.randomize()
 	_load_best()
 	_build_ui()
+	_setup_audio()
 	_show_menu("NEON RUSH", "TAP LEFT OR RIGHT TO STEP ONE LANE\nDodge blocks. Chain crystals and near-misses.", "PLAY")
 
 func _build_ui() -> void:
@@ -131,6 +139,10 @@ func start_game() -> void:
 	last_safe_lane = 1
 	objects.clear()
 	queued_rows.clear()
+	sparks.clear()
+	trails.clear()
+	feedback = ""
+	feedback_timer = 0.0
 	elapsed = 0.0
 	spawn_clock = 0.9
 	score_fraction = 0.0
@@ -158,11 +170,16 @@ func _process(delta: float) -> void:
 	if not running or paused:
 		return
 
+	_animate_fx(delta)
 	# Cap simulation delta to avoid collision tunnelling and huge resume jumps.
 	var dt := minf(delta, 0.05)
 	elapsed += dt
 	invulnerable = maxf(0.0, invulnerable - dt)
 	player_x = move_toward(player_x, LANES[lane], MOVE_SPEED * dt)
+	trails.append({"position": Vector2(player_x, PLAYER_Y), "life": 0.22})
+	if trails.size() > 12:
+		trails.pop_front()
+	pulse += dt
 	score_fraction += dt * (15.0 + float(mini(combo, 10)))
 	var gained := int(floor(score_fraction))
 	if gained > 0:
@@ -193,6 +210,9 @@ func _process(delta: float) -> void:
 			combo += 1
 			score += 50 * mini(combo, 5)
 			hint.text = "CRYSTAL COMBO x%d" % mini(combo, 5)
+			_burst(Vector2(LANES[int(obj["lane"])], PLAYER_Y), GOLD, 14)
+			_feedback("+%d CRYSTAL" % (50 * mini(combo, 5)))
+			_tone(660.0 + float(mini(combo, 6)) * 70.0, 0.08)
 			objects.remove_at(i)
 			continue
 		if previous_y <= PLAYER_Y and next_y > PLAYER_Y and obj["kind"] == "block" and not bool(obj.get("near", false)):
@@ -201,6 +221,9 @@ func _process(delta: float) -> void:
 				combo += 1
 				score += 25 * mini(combo, 5)
 				hint.text = "NEAR MISS! COMBO x%d" % mini(combo, 5)
+				_burst(Vector2(LANES[int(obj["lane"])], PLAYER_Y), PINK, 6)
+				_feedback("NEAR MISS +%d" % (25 * mini(combo, 5)))
+				_tone(480.0, 0.05)
 		if next_y > HEIGHT + 70.0:
 			objects.remove_at(i)
 		else:
@@ -267,6 +290,8 @@ func _end_game() -> void:
 	running = false
 	game_over = true
 	combo = 0
+	_burst(Vector2(player_x, PLAYER_Y), PINK, 25)
+	_tone(150.0, 0.18)
 	if score > best:
 		best = score
 		_save_best()
@@ -316,28 +341,99 @@ func _unhandled_input(event: InputEvent) -> void:
 		_step(-1 if event.position.x < WIDTH * 0.5 else 1)
 
 func _step(direction: int) -> void:
+	var old_lane := lane
 	lane = clampi(lane + direction, 0, 2)
+	if old_lane != lane:
+		_burst(Vector2(player_x, PLAYER_Y), CYAN, 4)
+		_tone(320.0, 0.03)
+
+func _setup_audio() -> void:
+	sound_player = AudioStreamPlayer.new()
+	var generator := AudioStreamGenerator.new()
+	generator.mix_rate = 22050.0
+	generator.buffer_length = 0.3
+	sound_player.stream = generator
+	sound_player.volume_db = -12.0
+	add_child(sound_player)
+	sound_player.play()
+	sound_stream = sound_player.get_stream_playback() as AudioStreamGeneratorPlayback
+
+func _tone(frequency: float, duration: float) -> void:
+	if sound_stream == null:
+		return
+	var count := mini(int(duration * 22050.0), sound_stream.get_frames_available())
+	for i in range(count):
+		var t := float(i) / 22050.0
+		var envelope := 1.0 - float(i) / float(maxi(count, 1))
+		var value := sin(TAU * frequency * t) * envelope * 0.16
+		sound_stream.push_frame(Vector2(value, value))
+
+func _burst(origin: Vector2, tint: Color, count: int) -> void:
+	for i in range(count):
+		if sparks.size() >= 80:
+			sparks.pop_front()
+		var angle := rng.randf_range(0.0, TAU)
+		sparks.append({"position": origin, "velocity": Vector2(cos(angle), sin(angle)) * rng.randf_range(65.0, 180.0), "life": 0.4, "color": tint})
+
+func _feedback(message: String) -> void:
+	feedback = message
+	feedback_timer = 0.8
+
+func _animate_fx(delta: float) -> void:
+	var dt := minf(delta, 0.05)
+	feedback_timer = maxf(0.0, feedback_timer - dt)
+	for i in range(sparks.size() - 1, -1, -1):
+		var fx: Dictionary = sparks[i]
+		fx["life"] = float(fx["life"]) - dt
+		if float(fx["life"]) <= 0.0:
+			sparks.remove_at(i)
+		else:
+			fx["position"] = Vector2(fx["position"]) + Vector2(fx["velocity"]) * dt
+			sparks[i] = fx
+	for i in range(trails.size() - 1, -1, -1):
+		var fx: Dictionary = trails[i]
+		fx["life"] = float(fx["life"]) - dt
+		if float(fx["life"]) <= 0.0:
+			trails.remove_at(i)
+		else:
+			trails[i] = fx
+	queue_redraw()
 
 func _draw() -> void:
 	draw_rect(Rect2(Vector2.ZERO, Vector2(WIDTH, HEIGHT)), BG)
 	for x in LANES:
-		draw_line(Vector2(x, 115), Vector2(x, HEIGHT), Color("212b59"), 3.0)
-	for y in range(135, 854, 85):
-		draw_line(Vector2(50, y), Vector2(430, y), Color("182146"), 1.0)
+		draw_line(Vector2(x, 115), Vector2(x, HEIGHT), Color(0.0, 0.7, 1.0, 0.13), 10.0)
+		draw_line(Vector2(x, 115), Vector2(x, HEIGHT), Color("286c9e"), 2.0)
+	var offset := fmod(elapsed * speed * 0.2, 85.0)
+	for y in range(135, 950, 85):
+		var yy := float(y) + offset
+		if yy < HEIGHT:
+			draw_line(Vector2(50, yy), Vector2(430, yy), Color("193357"), 1.0)
+	for fx in trails:
+		var alpha := float(fx["life"]) / 0.22
+		draw_circle(Vector2(fx["position"]), 19.0 * alpha, Color(0.1, 0.9, 1.0, alpha * 0.24))
+	draw_circle(Vector2(player_x, PLAYER_Y), 40.0 + sin(pulse * 9.0) * 2.0, Color(0.1, 0.9, 1.0, 0.13))
 	draw_circle(Vector2(player_x, PLAYER_Y), 33.0, Color(0.23, 0.92, 1.0, 0.2))
 	draw_circle(Vector2(player_x, PLAYER_Y), 21.0, CYAN if invulnerable <= 0.0 else GOLD)
 	draw_circle(Vector2(player_x - 7, PLAYER_Y - 8), 6.0, Color.WHITE)
 	for obj in objects:
 		var p := Vector2(LANES[int(obj["lane"])], float(obj["y"]))
 		if obj["kind"] == "block":
+			draw_rect(Rect2(p - Vector2(40, 33), Vector2(80, 66)), Color(1.0, 0.1, 0.5, 0.13))
 			draw_rect(Rect2(p - Vector2(33, 26), Vector2(66, 52)), PINK)
 			draw_rect(Rect2(p - Vector2(23, 17), Vector2(46, 34)), Color("831d51"))
 		else:
-			var diamond := PackedVector2Array([
-				p + Vector2(0, -23), p + Vector2(18, 0),
-				p + Vector2(0, 23), p + Vector2(-18, 0)
-			])
+			draw_circle(p, 29.0, Color(1.0, 0.85, 0.25, 0.12))
+			var scale := 1.0 + 0.08 * sin(pulse * 8.0 + p.y * 0.03)
+			var diamond := PackedVector2Array([p + Vector2(0, -23) * scale, p + Vector2(18, 0) * scale, p + Vector2(0, 23) * scale, p + Vector2(-18, 0) * scale])
 			draw_colored_polygon(diamond, GOLD)
+	for fx in sparks:
+		var alpha := float(fx["life"]) / 0.4
+		var tint: Color = fx["color"]
+		tint.a = alpha
+		draw_circle(Vector2(fx["position"]), 3.0 + 2.0 * alpha, tint)
+	if feedback_timer > 0.0:
+		draw_string(ThemeDB.fallback_font, Vector2(100, PLAYER_Y - 80.0 - (0.8 - feedback_timer) * 30.0), feedback, HORIZONTAL_ALIGNMENT_CENTER, 280, 23, GOLD)
 
 func _save_best() -> void:
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
