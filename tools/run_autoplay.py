@@ -53,7 +53,7 @@ def main():
             directory = tmp_path / name
             directory.mkdir()
             env[name] = str(directory)
-        cmd = [str(godot), "--headless", "--path", str(project), "--script", ("res://tests/features_v04.gd" if args.suite == "features" else "res://tests/autoplay.gd"),
+        cmd = [str(godot), "--headless", "--audio-driver", "Dummy", "--path", str(project), "--quit-after", "2400" if args.suite == "features" else "24000", "--script", ("res://tests/features_v04.gd" if args.suite == "features" else "res://tests/autoplay.gd"),
                "--", f"--runs={args.runs}", f"--seconds={args.seconds}", f"--report={report_path}"]
         timed_out = False
         try:

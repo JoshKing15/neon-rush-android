@@ -11,6 +11,7 @@ func check_case(name: String, ok: bool) -> void:
 		failures.append(name)
 
 func _initialize() -> void:
+	print("FEATURE TEST START")
 	call_deferred("run_tests")
 
 func run_tests() -> void:
@@ -27,6 +28,7 @@ func run_tests() -> void:
 	legacy.close()
 	game = GAME.instantiate()
 	root.add_child(game)
+	print("FEATURE: scene instantiated")
 	await process_frame
 	game.set_process(false)
 	check_case("Legacy best score loads", game.best == 1234)
@@ -99,6 +101,7 @@ func run_tests() -> void:
 	game._save_profile()
 	var restored = GAME.instantiate()
 	root.add_child(restored)
+	print("FEATURE: reload instantiated")
 	await process_frame
 	restored.set_process(false)
 	check_case("Wallet persists after reload", restored.wallet == 25)

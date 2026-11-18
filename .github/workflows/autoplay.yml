@@ -39,7 +39,7 @@ jobs:
         run: |
           python3 tools/run_autoplay.py --suite features \
             --godot /tmp/Godot_v4.4.1-stable_linux.x86_64 \
-            --timeout 180 --output reports
+            --timeout 45 --output reports
 
       - name: Capture rendered gameplay screenshots
         if: always()
@@ -48,8 +48,8 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq xvfb libgl1 libx11-6 libxcursor1 libxrandr2 libxi6 libasound2t64
           mkdir -p reports/screenshots
-          timeout 120s xvfb-run -a -s "-screen 0 1024x900x24" \
-            /tmp/Godot_v4.4.1-stable_linux.x86_64 --path . \
+          timeout 45s xvfb-run -a -s "-screen 0 1024x900x24" \
+            /tmp/Godot_v4.4.1-stable_linux.x86_64 --audio-driver Dummy --path . --quit-after 1200 \
             --script res://tests/screenshots.gd -- \
             --output="$PWD/reports/screenshots"
 
