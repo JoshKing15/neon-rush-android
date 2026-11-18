@@ -43,6 +43,18 @@ jobs:
             --godot /tmp/Godot_v4.4.1-stable_linux.x86_64 \
             --timeout 180 --output reports
 
+      - name: Capture rendered gameplay screenshots
+        if: always()
+        shell: bash
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb libgl1 libx11-6 libxcursor1 libxrandr2 libxi6 libasound2t64
+          mkdir -p reports/screenshots
+          xvfb-run -a -s "-screen 0 1024x900x24" \
+            /tmp/Godot_v4.4.1-stable_linux.x86_64 --path . \
+            --script res://tests/screenshots.gd -- \
+            --output="$PWD/reports/screenshots"
+
       - name: Upload logs and reports (even on failure)
         if: always()
         uses: actions/upload-artifact@v4
