@@ -7,6 +7,7 @@ const STEP := 0.05
 const HIT_Y := 35.0
 const HIT_X := 44.0
 const MOVE_SPEED := 1800.0
+const SAFETY_TIME := 0.08
 
 func _initialize() -> void:
 	call_deferred("_run")
@@ -50,10 +51,12 @@ func _run() -> void:
 		var safe_at_death: Array[int] = []
 		var avoidable := false
 		var fairness_violations := 0
+		var death_snapshot: Array[Dictionary] = []
+		var lane_x_at_death := -1.0
 		for frame in range(int(ceil(seconds / STEP))):
 			if not game.running or game.game_over:
 				break
-			var threats := _upcoming_rows(game, 1.4)
+			var threats := _upcoming_rows_from_objects(game.objects, float(game.speed), 1.4)
 			if not threats.is_empty() and last_threat_time < 0.0:
 				last_threat_time = simulated
 			var target: int = _choose_lane(game, strategy, threats)
@@ -65,17 +68,21 @@ func _run() -> void:
 					last_threat_time = -1.0
 			# Capture collision candidates before _process, since death may update UI.
 			var before := _collision_candidates(game)
+			var before_x: float = float(game.player_x)
+			var before_lane: int = int(game.lane)
 			game._process(STEP)
 			simulated += STEP
 			if game.game_over:
 				lane_at_death = game.lane
 				speed_at_death = game.speed
 				killer = _closest_killer(game, before)
-				safe_at_death = _safe_lanes(game, 0.0)
-				# A safe lane at the collision instant does NOT imply it was reachable.
-				avoidable = _path_exists(game, 0.6)
+				lane_x_at_death = float(game.player_x)
+				death_snapshot = _upcoming_rows_from_objects(before, float(game.speed), 0.8)
+				safe_at_death = _safe_lanes_from_objects(before, float(game.speed), 0.0)
+				# Counterfactual uses pre-collision position and known spawned rows only.
+				avoidable = _path_exists_from(before, float(game.speed), before_x, before_lane, 0.8)
 				break
-			if not _path_exists(game, 1.4):
+			if not _path_exists_from(game.objects, float(game.speed), float(game.player_x), int(game.lane), 1.4):
 				fairness_violations += 1
 			if game.lane < 0 or game.lane > 2:
 				failures.append("Run %d: invalid lane" % (run_id + 1))
@@ -91,10 +98,11 @@ func _run() -> void:
 			"run": run_id + 1, "seed": 124891 + run_id, "strategy": strategy,
 			"seconds_simulated": snappedf(simulated, 0.01), "score": game.score,
 			"crystals": game.crystals, "lane_moves": moves, "died": died,
-			"death_lane": lane_at_death, "death_obstacle": killer,
+			"death_lane": lane_at_death, "death_player_x": lane_x_at_death,
+			"death_obstacle": killer, "death_rows_snapshot": death_snapshot,
 			"safe_lanes_at_death": safe_at_death, "reaction_time": reaction_time,
 			"avoidable_estimate": avoidable, "speed_at_death": speed_at_death,
-			"fairness_probe_failures": fairness_violations,
+			"unreachable_from_current_state_probes": fairness_violations,
 			"shield_remaining": game.shield_charges
 		})
 		print("AUTOPLAY[%s] RUN %d/%d: %.2fs score=%d moves=%d died=%s fairness_probes=%d" % [strategy, run_id + 1, runs, simulated, game.score, moves, str(died), fairness_violations])
@@ -107,7 +115,8 @@ func _run() -> void:
 		"limitations": [
 			"Headless simulation only, not Android device or human testing",
 			"Fairness probes consider currently spawned blocks, not future random spawns",
-			"Fairness probes and avoidability estimates are diagnostic, not proofs",
+			"Unreachable probes measure the bot current position, NOT whether the generator created an unfair pattern",
+			"Death obstacle is inferred from pre-step objects and must be verified against collision geometry",
 			"Deaths do not automatically fail the QA suite"
 		]
 	}
@@ -123,58 +132,51 @@ func _run() -> void:
 	print("AUTOPLAY REPORT: " + report_path)
 	quit(1 if not failures.is_empty() else 0)
 
-func _upcoming_rows(game: Node, horizon: float) -> Array[Dictionary]:
-	var rows: Array[Dictionary] = []
-	for obj in game.objects:
-		if obj["kind"] != "block":
-			continue
-		var eta: float = (PLAYER_Y - float(obj["y"])) / maxf(float(game.speed), 1.0)
-		if eta < -0.1 or eta > horizon:
-			continue
-		var found := false
-		for row in rows:
-			if absf(float(row["eta"]) - eta) < 0.08:
-				row["blocked"].append(int(obj["lane"]))
-				found = true
-				break
-		if not found:
-			rows.append({"eta": eta, "blocked": [int(obj["lane"])]})
-	rows.sort_custom(func(a, b): return float(a["eta"]) < float(b["eta"]))
-	return rows
-
 func _choose_lane(game: Node, strategy: String, rows: Array[Dictionary]) -> int:
+	var current: int = int(game.lane)
 	if rows.is_empty():
-		return game.lane
-	var lookahead: float = 0.35 if strategy == "basic" else (0.95 if strategy == "competent" else 1.4)
-	var selected: int = int(game.lane)
-	var best_score: float = -INF
+		return current
+	# A basic player only reacts to an imminent obstacle in the occupied lane.
+	# More advanced players evaluate a feasible path through the visible rows.
+	var horizon: float = 0.35 if strategy == "basic" else (1.0 if strategy == "competent" else 1.4)
+	var relevant: Array[Dictionary] = []
+	for row in rows:
+		if float(row["eta"]) <= horizon:
+			relevant.append(row)
+	if relevant.is_empty():
+		return current
+	if strategy == "basic":
+		if not relevant[0]["blocked"].has(current):
+			return current
+		for candidate in range(3):
+			if not relevant[0]["blocked"].has(candidate):
+				return candidate
+		return current
+	# Only consider moves which can be reached before the first collision.
+	# The path checker allows a different lane for each subsequent obstacle row.
+	var best_lane: int = current
+	var best_cost: float = INF
 	for candidate in range(3):
-		var travel: float = absf(LANES[candidate] - float(game.player_x)) / MOVE_SPEED
-		var score_value := -float(absi(candidate - game.lane)) * 0.5
-		var viable := true
-		for row in rows:
-			var eta: float = float(row["eta"])
-			if eta > lookahead:
-				continue
-			if row["blocked"].has(candidate) and eta >= -0.05:
-					viable = false
-					break
-			if eta < travel + 0.06:
-					viable = false
-					break
-		if not viable:
+		var arrival: float = absf(LANES[candidate] - float(game.player_x)) / MOVE_SPEED
+		if not _path_from_lane(candidate, relevant, arrival):
 			continue
-		if strategy == "reference" and not _path_from_lane(candidate, rows, travel):
-			continue
-		for obj in game.objects:
-			if int(obj["lane"]) == candidate and obj["kind"] == "crystal":
-				var eta_reward: float = (PLAYER_Y - float(obj["y"])) / maxf(float(game.speed), 1.0)
-				if eta_reward > travel and eta_reward < lookahead:
-					score_value += 0.3
-		if score_value > best_score:
-			best_score = score_value
-			selected = candidate
-	return selected
+		var cost: float = float(absi(candidate - current)) * 2.0
+		# Do not zigzag for crystals: survival is the primary QA metric.
+		if candidate == current:
+			cost -= 0.5
+		if cost < best_cost:
+			best_cost = cost
+			best_lane = candidate
+	# If no complete path exists, react to the nearest row instead of freezing.
+	if best_cost == INF:
+		var first: Dictionary = relevant[0]
+		if not first["blocked"].has(current):
+			return current
+		for candidate in range(3):
+			var travel: float = absf(LANES[candidate] - float(game.player_x)) / MOVE_SPEED
+			if not first["blocked"].has(candidate) and travel + SAFETY_TIME <= float(first["eta"]):
+				return candidate
+	return best_lane
 
 func _path_from_lane(initial_lane: int, rows: Array[Dictionary], initial_time: float) -> bool:
 	var states: Array[Dictionary] = [{"lane": initial_lane, "time": initial_time}]
@@ -185,30 +187,49 @@ func _path_from_lane(initial_lane: int, rows: Array[Dictionary], initial_time: f
 			for lane_id in range(3):
 				if row["blocked"].has(lane_id):
 					continue
-				var required: float = absf(LANES[lane_id] - LANES[int(state["lane"])]) / MOVE_SPEED
-				if float(state["time"]) + required + 0.05 <= eta:
+				var travel: float = absf(LANES[lane_id] - LANES[int(state["lane"])]) / MOVE_SPEED
+				if float(state["time"]) + travel + SAFETY_TIME <= eta:
 					next_states.append({"lane": lane_id, "time": eta})
 		if next_states.is_empty():
 			return false
 		states = next_states
 	return true
 
-func _path_exists(game: Node, horizon: float) -> bool:
-	var rows := _upcoming_rows(game, horizon)
+func _path_exists_from(objs: Array, current_speed: float, current_x: float, current_lane: int, horizon: float) -> bool:
+	var rows: Array[Dictionary] = _upcoming_rows_from_objects(objs, current_speed, horizon)
 	if rows.is_empty():
 		return true
 	for candidate in range(3):
-		var travel: float = absf(LANES[candidate] - float(game.player_x)) / MOVE_SPEED
+		var travel: float = absf(LANES[candidate] - current_x) / MOVE_SPEED
 		if _path_from_lane(candidate, rows, travel):
 			return true
 	return false
 
-func _safe_lanes(game: Node, horizon: float) -> Array[int]:
-	var result: Array[int] = [0, 1, 2]
-	for obj in game.objects:
+func _upcoming_rows_from_objects(objs: Array, current_speed: float, horizon: float) -> Array[Dictionary]:
+	var rows: Array[Dictionary] = []
+	for obj in objs:
 		if obj["kind"] != "block":
 			continue
-		var eta: float = (PLAYER_Y - float(obj["y"])) / maxf(float(game.speed), 1.0)
+		var eta: float = (PLAYER_Y - float(obj["y"])) / maxf(current_speed, 1.0)
+		if eta < -0.1 or eta > horizon:
+			continue
+		var found: bool = false
+		for row in rows:
+			if absf(float(row["eta"]) - eta) < 0.08:
+				row["blocked"].append(int(obj["lane"]))
+				found = true
+				break
+		if not found:
+			rows.append({"eta": eta, "blocked": [int(obj["lane"])]})
+	rows.sort_custom(func(a, b): return float(a["eta"]) < float(b["eta"]))
+	return rows
+
+func _safe_lanes_from_objects(objs: Array, current_speed: float, horizon: float) -> Array[int]:
+	var result: Array[int] = [0, 1, 2]
+	for obj in objs:
+		if obj["kind"] != "block":
+			continue
+		var eta: float = (PLAYER_Y - float(obj["y"])) / maxf(current_speed, 1.0)
 		if eta >= -0.05 and eta <= horizon + 0.05:
 			result.erase(int(obj["lane"]))
 	return result
@@ -222,10 +243,10 @@ func _collision_candidates(game: Node) -> Array[Dictionary]:
 
 func _closest_killer(game: Node, before: Array[Dictionary]) -> Dictionary:
 	var nearest: Dictionary = {}
-	var best_distance := INF
+	var best_distance: float = INF
 	for obj in before:
 		var distance: float = absf(float(obj["y"]) + float(game.speed) * STEP - PLAYER_Y)
 		if distance < best_distance and absf(LANES[int(obj["lane"])] - float(game.player_x)) <= HIT_X:
 			best_distance = distance
-			nearest = {"lane": int(obj["lane"]), "y_before": float(obj["y"])}
+			nearest = {"lane": int(obj["lane"]), "y_before": float(obj["y"]), "estimated_y_after": float(obj["y"]) + float(game.speed) * STEP}
 	return nearest
