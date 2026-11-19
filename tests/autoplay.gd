@@ -145,9 +145,9 @@ func _upcoming_rows(game: Node, horizon: float) -> Array[Dictionary]:
 func _choose_lane(game: Node, strategy: String, rows: Array[Dictionary]) -> int:
 	if rows.is_empty():
 		return game.lane
-	var lookahead := 0.35 if strategy == "basic" else (0.95 if strategy == "competent" else 1.4)
-	var selected := game.lane
-	var best_score := -INF
+	var lookahead: float = 0.35 if strategy == "basic" else (0.95 if strategy == "competent" else 1.4)
+	var selected: int = int(game.lane)
+	var best_score: float = -INF
 	for candidate in range(3):
 		var travel: float = absf(LANES[candidate] - float(game.player_x)) / MOVE_SPEED
 		var score_value := -float(absi(candidate - game.lane)) * 0.5
