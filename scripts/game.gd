@@ -346,7 +346,7 @@ func _spawn_row() -> void:
 		var patterns: Array = EASY if tier == 0 else (MEDIUM if tier == 1 else HARD)
 		var candidates: Array = []
 		for pattern in patterns:
-			if _pattern_reachable(pattern, last_safe_lane):
+			if _pattern_reachable(pattern, last_safe_lane) and _pattern_fits_gap(pattern, last_safe_lane):
 				candidates.append(pattern)
 		if candidates.is_empty():
 			queued_rows.append("...")
@@ -385,6 +385,23 @@ func _pattern_reachable(pattern: Array, initial_lane: int) -> bool:
 			for previous in reachable:
 				if absi(n - previous) <= 1 and not next_lanes.has(n):
 					next_lanes.append(n)
+		if next_lanes.is_empty():
+			return false
+		reachable = next_lanes
+	return true
+
+func _pattern_fits_gap(pattern: Array, initial_lane: int) -> bool:
+	# Dynamic programming: retain all physically reachable safe lanes per row.
+	var reachable: Array[int] = [initial_lane]
+	var max_steps: int = maxi(0, int(floor((ROW_GAP / maxf(speed, 1.0)) * MOVE_SPEED / 130.0)))
+	for row in pattern:
+		var next_lanes: Array[int] = []
+		for candidate in range(3):
+			if row.substr(candidate, 1) == "X":
+				continue
+			for previous in reachable:
+				if absi(candidate - previous) <= max_steps and not next_lanes.has(candidate):
+					next_lanes.append(candidate)
 		if next_lanes.is_empty():
 			return false
 		reachable = next_lanes
@@ -456,7 +473,7 @@ func _spawn_powerup() -> void:
 	# Spawn only in a lane with no newly spawned obstacle; pickups are optional.
 	var free_lanes: Array[int] = [0, 1, 2]
 	for obj in objects:
-		if absf(float(obj["y"]) + 55.0) < 80.0 and obj["kind"] == "block":
+		if absf(float(obj["y"]) + 55.0) < ROW_GAP * 0.6 and obj["kind"] == "block":
 			free_lanes.erase(int(obj["lane"]))
 	if free_lanes.is_empty():
 		return

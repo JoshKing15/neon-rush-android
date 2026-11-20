@@ -30,8 +30,24 @@ jobs:
         run: |
           python3 tools/run_autoplay.py \
             --godot /tmp/Godot_v4.4.1-stable_linux.x86_64 \
-            --runs 100 --seconds 60 --timeout 900 \
-            --output reports
+            --runs 100 --seconds 60 --strategy competent --timeout 360 \
+            --output reports/competent
+
+      - name: Run 25-game reference strategy
+        shell: bash
+        run: |
+          python3 tools/run_autoplay.py \
+            --godot /tmp/Godot_v4.4.1-stable_linux.x86_64 \
+            --runs 25 --seconds 60 --strategy reference --timeout 240 \
+            --output reports/reference
+
+      - name: Run 25-game basic strategy
+        shell: bash
+        run: |
+          python3 tools/run_autoplay.py \
+            --godot /tmp/Godot_v4.4.1-stable_linux.x86_64 \
+            --runs 25 --seconds 60 --strategy basic --timeout 240 \
+            --output reports/basic
 
       - name: Run v0.4 feature tests and capture console
         if: always()

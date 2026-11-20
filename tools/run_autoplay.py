@@ -20,6 +20,7 @@ def main():
     p.add_argument("--godot", default=None, help="Godot executable (default: search PATH)")
     p.add_argument("--suite", choices=("autoplay", "features"), default="autoplay")
     p.add_argument("--runs", type=int, default=100)
+    p.add_argument("--strategy", choices=("basic", "competent", "reference"), default="competent")
     p.add_argument("--seconds", type=float, default=45.0, help="Simulated seconds per run")
     p.add_argument("--timeout", type=int, default=600, help="Wall-clock subprocess timeout in seconds")
     p.add_argument("--output", type=Path, default=ROOT / "reports")
@@ -54,7 +55,7 @@ def main():
             directory.mkdir()
             env[name] = str(directory)
         cmd = [str(godot), "--headless", "--audio-driver", "Dummy", "--path", str(project), "--quit-after", "1200" if args.suite == "features" else "24000", "--script", ("res://tests/features_v04.gd" if args.suite == "features" else "res://tests/autoplay.gd"),
-               "--", f"--runs={args.runs}", f"--seconds={args.seconds}", f"--report={report_path}"]
+               "--", f"--runs={args.runs}", f"--seconds={args.seconds}", f"--report={report_path}", f"--strategy={args.strategy}"]
         timed_out = False
         try:
             proc = subprocess.run(cmd, cwd=project, env=env, capture_output=True,
@@ -86,6 +87,7 @@ def main():
         "godot_exit_code": exit_code,
         "timed_out": timed_out,
         "suite": args.suite,
+        "strategy": args.strategy if args.suite == "autoplay" else None,
         "runs_requested": 1 if args.suite == "features" else args.runs,
         "runs_completed": game_report.get("runs_completed", 0) if game_report else 0,
         "console_error_count": len(errors),
