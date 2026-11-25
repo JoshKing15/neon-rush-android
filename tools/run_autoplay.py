@@ -19,6 +19,7 @@ def main():
     p = argparse.ArgumentParser(description="Neon Rush isolated Godot auto-play and console reporter")
     p.add_argument("--godot", default=None, help="Godot executable (default: search PATH)")
     p.add_argument("--suite", choices=("autoplay", "features"), default="autoplay")
+    p.add_argument("--seed", type=int, default=124891)
     p.add_argument("--runs", type=int, default=100)
     p.add_argument("--seconds", type=float, default=45.0, help="Simulated seconds per run")
     p.add_argument("--timeout", type=int, default=600, help="Wall-clock subprocess timeout in seconds")
@@ -54,7 +55,7 @@ def main():
             directory.mkdir()
             env[name] = str(directory)
         cmd = [str(godot), "--headless", "--audio-driver", "Dummy", "--path", str(project), "--quit-after", "1200" if args.suite == "features" else "24000", "--script", ("res://tests/features_v04.gd" if args.suite == "features" else "res://tests/autoplay.gd"),
-               "--", f"--runs={args.runs}", f"--seconds={args.seconds}", f"--report={report_path}"]
+               "--", f"--seed={args.seed}", f"--runs={args.runs}", f"--seconds={args.seconds}", f"--report={report_path}"]
         timed_out = False
         try:
             proc = subprocess.run(cmd, cwd=project, env=env, capture_output=True,
@@ -76,6 +77,8 @@ def main():
             game_report = json.loads(report_path.read_text(encoding="utf-8"))
         except (ValueError, OSError) as exc:
             errors.append(f"Invalid gameplay report: {exc}")
+    if game_report is not None and game_report.get("runs_completed") != (1 if args.suite == "features" else args.runs):
+        errors.append("Incomplete test report")
     passed = exit_code == 0 and not errors and game_report is not None and not game_report.get("invariant_failures")
     commit_sha = os.environ.get("GITHUB_SHA", "unknown-local")
     summary = {
