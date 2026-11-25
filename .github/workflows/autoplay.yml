@@ -2,6 +2,8 @@ name: Neon Rush Auto-Play QA
 
 on:
   workflow_dispatch:
+  push:
+    branches: ["fix/v0.4.2-gameplay-stability"]
 
 permissions:
   contents: read
@@ -9,7 +11,7 @@ permissions:
 jobs:
   autoplay:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 30
     steps:
       - name: Check out game
         uses: actions/checkout@v4
@@ -24,6 +26,10 @@ jobs:
           unzip -q /tmp/godot.zip -d /tmp
           chmod +x /tmp/Godot_v4.4.1-stable_linux.x86_64
           /tmp/Godot_v4.4.1-stable_linux.x86_64 --headless --version
+
+      - name: Run diagnostic batch first
+        run: |
+          python3 tools/run_autoplay.py --godot /tmp/Godot_v4.4.1-stable_linux.x86_64 --runs 5 --seconds 60 --timeout 180 --output reports/diagnostic
 
       - name: Run 100-game stress test and capture console
         shell: bash
