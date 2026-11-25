@@ -30,6 +30,8 @@ const MEDIUM := [["XX."], ["X.X"], [".XX"], ["X..", ".X."], ["..X", ".X."], [".X
 const HARD := [["XX.", ".X.", "X.."], [".XX", "X..", "..X"], ["X.X", ".X.", "X.X"], ["..X", "X..", "..X"]]
 
 var rng := RandomNumberGenerator.new()
+var fx_rng := RandomNumberGenerator.new()
+var last_collision: Dictionary = {}
 var objects: Array[Dictionary] = []
 var lane := 1
 var player_x := 240.0
@@ -84,6 +86,7 @@ var pause_button: Button
 
 func _ready() -> void:
 	rng.randomize()
+	fx_rng.randomize()
 	_load_best()
 	_load_profile()
 	_build_ui()
@@ -202,6 +205,8 @@ func _primary_action() -> void:
 
 func start_game() -> void:
 	lane = 1
+	last_collision.clear()
+	play_button.disabled = false
 	player_x = LANES[lane]
 	last_safe_lane = 1
 	objects.clear()
@@ -253,6 +258,7 @@ func _process(delta: float) -> void:
 		var seconds := int(mission_seconds)
 		mission_seconds -= float(seconds)
 		_advance_mission(1, seconds)
+	var previous_x := player_x
 	player_x = move_toward(player_x, LANES[lane], MOVE_SPEED * dt)
 	trails.append({"position": Vector2(player_x, PLAYER_Y), "life": 0.22})
 	if trails.size() > 12:
@@ -283,7 +289,8 @@ func _process(delta: float) -> void:
 		obj["y"] = next_y
 		var crosses := previous_y <= PLAYER_Y + HIT_Y and next_y >= PLAYER_Y - HIT_Y
 		var dx := absf(player_x - LANES[int(obj["lane"])])
-		if crosses and obj["kind"] == "block" and dx <= HIT_X and invulnerable <= 0.0:
+		var collision := _swept_hit(previous_x, player_x, previous_y, next_y, LANES[int(obj["lane"])])
+		if collision and obj["kind"] == "block" and invulnerable <= 0.0:
 			if shield_charges > 0:
 				shield_charges -= 1
 				invulnerable = 1.0
@@ -292,6 +299,7 @@ func _process(delta: float) -> void:
 				objects.remove_at(i)
 				continue
 			objects[i] = obj
+			last_collision = {"kind": "block", "lane": int(obj["lane"]), "obstacle_y": next_y, "player_x": player_x, "previous_x": previous_x, "target_lane": lane, "speed": speed, "elapsed": elapsed}
 			_end_game()
 			break
 		if crosses and (obj["kind"] == "shield" or obj["kind"] == "magnet") and dx <= HIT_X:
@@ -336,6 +344,16 @@ func _process(delta: float) -> void:
 	_refresh_hud()
 	queue_redraw()
 
+func _swept_hit(x0: float, x1: float, y0: float, y1: float, block_x: float) -> bool:
+	if y1 < PLAYER_Y - HIT_Y or y0 > PLAYER_Y + HIT_Y:
+		return false
+	var dy := y1 - y0
+	var enter := clampf((PLAYER_Y - HIT_Y - y0) / dy, 0.0, 1.0) if dy > 0.0 else 0.0
+	var leave := clampf((PLAYER_Y + HIT_Y - y0) / dy, 0.0, 1.0) if dy > 0.0 else 1.0
+	var xa := lerpf(x0, x1, enter)
+	var xb := lerpf(x0, x1, leave)
+	return minf(xa, xb) <= block_x + HIT_X and maxf(xa, xb) >= block_x - HIT_X
+
 func _spawn_row() -> void:
 	if queued_rows.is_empty():
 		var tier := 0
@@ -364,7 +382,7 @@ func _spawn_row() -> void:
 	# Prefer reachable safe lane closest to previous planned path.
 	var reachable: Array[int] = []
 	for n in safe:
-		if absi(n - last_safe_lane) <= 1:
+		if absi(n - last_safe_lane) <= 1 and _pattern_reachable(queued_rows, n):
 			reachable.append(n)
 	if not reachable.is_empty():
 		last_safe_lane = reachable[rng.randi_range(0, reachable.size() - 1)]
@@ -488,8 +506,8 @@ func _burst(origin: Vector2, tint: Color, count: int) -> void:
 	for i in range(count):
 		if sparks.size() >= 80:
 			sparks.pop_front()
-		var angle := rng.randf_range(0.0, TAU)
-		sparks.append({"position": origin, "velocity": Vector2(cos(angle), sin(angle)) * rng.randf_range(65.0, 180.0), "life": 0.4, "color": tint})
+		var angle := fx_rng.randf_range(0.0, TAU)
+		sparks.append({"position": origin, "velocity": Vector2(cos(angle), sin(angle)) * fx_rng.randf_range(65.0, 180.0), "life": 0.4, "color": tint})
 
 func _feedback(message: String) -> void:
 	feedback = message
